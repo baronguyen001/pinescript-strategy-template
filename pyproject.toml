@@ -16,6 +16,7 @@ dependencies = ["numpy>=1.24", "pandas>=2.0"]
 [project.optional-dependencies]
 viz = ["matplotlib>=3.8"]
 dev = [
+  "ipykernel>=6.29",
   "mypy>=1.10",
   "nbstripout>=0.7",
   "papermill>=2.6",

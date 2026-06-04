@@ -27,5 +27,7 @@ jobs:
         run: mypy src/pinewf
       - name: Pytest
         run: pytest --cov=pinewf --cov-fail-under=75
+      - name: Register notebook kernel
+        run: python -m ipykernel install --user --name python3
       - name: Notebook smoke
         run: papermill examples/walkforward_demo.ipynb walkforward_demo_out.ipynb
