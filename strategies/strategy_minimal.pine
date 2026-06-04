@@ -1,0 +1,31 @@
+//@version=6
+strategy("MA Cross Template (minimal)", overlay=true, pyramiding=0, process_orders_on_close=false,
+     commission_type=strategy.commission.percent, commission_value=0.1, slippage=2)
+
+// Minimal teaching template: long-only moving-average cross with a fixed percent stop.
+// Defaults are illustrative starting points, not a recommendation.
+
+fast_length = input.int(20, "Fast SMA", minval=2)
+slow_length = input.int(50, "Slow SMA", minval=5)
+stop_loss_pct = input.float(8.0, "Stop loss %", minval=0.5, maxval=50)
+
+fast = ta.sma(close, fast_length)
+slow = ta.sma(close, slow_length)
+
+long_cond = ta.crossover(fast, slow)
+exit_cond = ta.crossunder(fast, slow)
+
+if long_cond and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+if strategy.position_size > 0
+    stop_price = strategy.position_avg_price * (1 - stop_loss_pct / 100)
+    strategy.exit("Stop", "Long", stop=stop_price)
+
+if exit_cond and strategy.position_size > 0
+    strategy.close("Long", comment="MA exit")
+
+plot(fast, "Fast SMA", color=color.new(color.teal, 0), linewidth=2)
+plot(slow, "Slow SMA", color=color.new(color.orange, 0), linewidth=2)
+plotshape(long_cond, "Long entry", shape.triangleup, location.belowbar, color=color.green, size=size.tiny)
+plotshape(exit_cond and strategy.position_size > 0, "Exit signal", shape.triangledown, location.abovebar, color=color.red, size=size.tiny)

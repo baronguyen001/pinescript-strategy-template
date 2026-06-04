@@ -1,0 +1,97 @@
+//@version=6
+strategy("MA Cross Strategy Template", overlay=true, pyramiding=0, process_orders_on_close=false,
+     commission_type=strategy.commission.percent, commission_value=0.1, slippage=2)
+
+// Parameterized long-only template for research. Defaults are illustrative starting points,
+// not a recommendation. Tune with your own market, timeframe, costs, and walk-forward tests.
+
+maGroup = "Moving averages"
+ma_type = input.string("EMA", "MA type", options=["SMA", "EMA"], group=maGroup)
+fast_length = input.int(20, "Fast length", minval=2, group=maGroup)
+slow_length = input.int(50, "Slow length", minval=5, group=maGroup)
+trend_length = input.int(200, "Trend length", minval=20, group=maGroup)
+use_trend_filter = input.bool(true, "Use trend filter", group=maGroup)
+
+riskGroup = "Risk"
+stop_type = input.string("Percent", "Stop type", options=["Percent", "ATR", "None"], group=riskGroup)
+stop_loss_pct = input.float(8.0, "Stop loss %", minval=0.5, maxval=50, group=riskGroup)
+atr_length = input.int(14, "ATR length", minval=1, group=riskGroup)
+atr_mult = input.float(2.0, "ATR stop multiple", minval=0.5, group=riskGroup)
+
+exitGroup = "Optional exits"
+use_take_profit = input.bool(false, "Use take profit", group=exitGroup)
+take_profit_pct = input.float(10.0, "Take profit %", minval=0.5, group=exitGroup)
+use_trailing = input.bool(false, "Use trailing stop", group=exitGroup)
+trailing_pct = input.float(15.0, "Trailing %", minval=0.5, group=exitGroup)
+use_chandelier = input.bool(false, "Use chandelier stop", group=exitGroup)
+chandelier_mult = input.float(3.0, "Chandelier ATR multiple", minval=0.5, group=exitGroup)
+
+ma(src, len) =>
+    ma_type == "SMA" ? ta.sma(src, len) : ta.ema(src, len)
+
+fast = ma(close, fast_length)
+slow = ma(close, slow_length)
+trend = ma(close, trend_length)
+atrv = ta.atr(atr_length)
+
+cross_up = ta.crossover(fast, slow)
+cross_dn = ta.crossunder(fast, slow)
+trend_ok = close > trend
+long_cond = cross_up and (not use_trend_filter or trend_ok)
+
+var float entry_price = na
+var float peak_high = na
+
+if long_cond and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+if strategy.position_size > 0 and strategy.position_size[1] <= 0
+    entry_price := strategy.position_avg_price
+    peak_high := high
+
+if strategy.position_size > 0
+    peak_high := math.max(nz(peak_high, high), high)
+    percent_stop = entry_price * (1 - stop_loss_pct / 100)
+    atr_stop = entry_price - atr_mult * atrv
+    base_stop = stop_type == "Percent" ? percent_stop : stop_type == "ATR" ? atr_stop : na
+    trail_stop = use_trailing ? peak_high * (1 - trailing_pct / 100) : na
+    chandelier_stop = use_chandelier ? peak_high - chandelier_mult * atrv : na
+    active_stop = base_stop
+    active_stop := na(trail_stop) ? active_stop : na(active_stop) ? trail_stop : math.max(active_stop, trail_stop)
+    active_stop := na(chandelier_stop) ? active_stop : na(active_stop) ? chandelier_stop : math.max(active_stop, chandelier_stop)
+    limit_price = use_take_profit ? entry_price * (1 + take_profit_pct / 100) : na
+    strategy.exit("Risk Exit", "Long", stop=active_stop, limit=limit_price)
+
+if cross_dn and strategy.position_size > 0
+    strategy.close("Long", comment="MA exit")
+
+if strategy.position_size == 0
+    entry_price := na
+    peak_high := na
+
+plot(fast, "Fast MA", color=color.new(color.teal, 0), linewidth=2)
+plot(slow, "Slow MA", color=color.new(color.orange, 0), linewidth=2)
+plot(trend, "Trend MA", color=color.new(color.gray, 10), linewidth=2)
+bgcolor(use_trend_filter and trend_ok ? color.new(color.green, 92) : na)
+plotshape(long_cond, title="Long entry", style=shape.triangleup, location=location.belowbar,
+     color=color.new(color.green, 0), size=size.tiny, text="BUY")
+plotshape(cross_dn and strategy.position_size > 0, title="Exit signal", style=shape.triangledown,
+     location=location.abovebar, color=color.new(color.red, 0), size=size.tiny, text="EXIT")
+
+alertcondition(long_cond, "Long entry", "{{ticker}} {{interval}}: LONG entry at {{close}}")
+alertcondition(cross_dn and strategy.position_size > 0, "Exit signal", "{{ticker}} {{interval}}: EXIT signal at {{close}}")
+
+var table info = table.new(position.top_right, 2, 6, border_width=1)
+if barstate.islast
+    table.cell(info, 0, 0, "Position")
+    table.cell(info, 1, 0, strategy.position_size > 0 ? "Long" : "Flat")
+    table.cell(info, 0, 1, "Entry")
+    table.cell(info, 1, 1, na(entry_price) ? "-" : str.tostring(entry_price, format.mintick))
+    table.cell(info, 0, 2, "Current")
+    table.cell(info, 1, 2, str.tostring(close, format.mintick))
+    table.cell(info, 0, 3, "Fast / Slow")
+    table.cell(info, 1, 3, str.tostring(fast, format.mintick) + " / " + str.tostring(slow, format.mintick))
+    table.cell(info, 0, 4, "Trend")
+    table.cell(info, 1, 4, str.tostring(trend, format.mintick))
+    table.cell(info, 0, 5, "Trend OK")
+    table.cell(info, 1, 5, trend_ok ? "Yes" : "No")
