@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.0 - 2026-06-05
+
+- Added `pinewf montecarlo` for trade-order shuffle and bootstrap robustness bands over user-supplied trade exports.
+- Added `strategies/strategy_meanrev.pine`, a second generic Pine v6 RSI/Bollinger mean-reversion template.
+- Expanded HTML reports with per-window parameters, train-vs-out-of-sample degradation charts, and optional Monte Carlo percentile bands.
+
 ## v0.1.0 - 2026-06-04
 
 - Added configurable and minimal Pine Script v6 strategy templates.

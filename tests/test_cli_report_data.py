@@ -63,3 +63,34 @@ def test_cli_grid_walkforward_and_report(tmp_path: Path, capsys) -> None:
     html = tmp_path / "out.html"
     assert main(["report", str(SAMPLE), "--html", str(html), "--walkforward"]) == 0
     assert html.exists()
+
+
+def test_cli_walkforward_html_with_monte_carlo(tmp_path: Path, capsys) -> None:
+    html = tmp_path / "wf.html"
+    assert (
+        main(
+            [
+                "walkforward",
+                str(SAMPLE),
+                "--train",
+                "2",
+                "--test",
+                "1",
+                "--optimize",
+                "--html",
+                str(html),
+                "--montecarlo-trades",
+                "examples/sample_tradingview_export.csv",
+                "--montecarlo-iters",
+                "5",
+                "--seed",
+                "3",
+            ]
+        )
+        == 0
+    )
+    assert "wrote" in capsys.readouterr().out
+    text = html.read_text(encoding="utf-8")
+    assert "Per-window Parameters" in text
+    assert "Walk-forward Degradation" in text
+    assert "Monte Carlo Robustness" in text

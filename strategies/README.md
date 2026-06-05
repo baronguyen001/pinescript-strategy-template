@@ -1,6 +1,6 @@
 # Strategy Templates
 
-Start with `strategy_minimal.pine` if you are new to Pine. Use `strategy_template.pine` when you want configurable trend filters, ATR stops, trailing stops, take profit exits, an info table, and alert conditions.
+Start with `strategy_minimal.pine` if you are new to Pine. Use `strategy_template.pine` when you want configurable trend filters, ATR stops, trailing stops, take profit exits, an info table, and alert conditions. Use `strategy_meanrev.pine` when you want a second generic RSI/Bollinger mean-reversion baseline.
 
 | Input | Meaning | How to Tune |
 | --- | --- | --- |
@@ -14,6 +14,12 @@ Start with `strategy_minimal.pine` if you are new to Pine. Use `strategy_templat
 | Take profit | Optional fixed profit exit | Useful for bounded moves, but can cut trends short. |
 | Trailing stop | Optional peak-based stop | Helps protect open profit after a move. |
 | Chandelier stop | Optional ATR trail from peak | Volatility-aware trend exit. |
+
+## Mean-reversion Template
+
+`strategy_meanrev.pine` enters below the lower Bollinger band when RSI is below the oversold threshold, then exits at the middle band. It shares the same generic risk input style and alert hooks as the trend template.
+
+See `docs/mean_reversion_template.md` for the setup flow.
 
 TradingView's Strategy Tester is useful, but a single in-sample number is easy to curve-fit. Use the Python companion to walk-forward your own thresholds and compare out-of-sample windows.
 

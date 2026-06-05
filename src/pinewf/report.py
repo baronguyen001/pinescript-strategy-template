@@ -6,6 +6,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from pinewf.engine import BacktestResult
@@ -31,6 +32,7 @@ def render_html_report(
     result: BacktestResult,
     metrics: dict,
     wf_report: pd.DataFrame | None = None,
+    monte_carlo_bands: pd.DataFrame | None = None,
     out_path: str | Path = "report.html",
 ) -> Path:
     """Write a self-contained HTML report with embedded equity image and tables."""
@@ -44,7 +46,15 @@ def render_html_report(
             "<h2>Walk-forward</h2>"
             f"<p><strong>Verdict:</strong> {escape(str(summary['verdict']))}</p>"
             f"{_dict_table(summary)}"
+            f"{_walk_forward_details(wf_report)}"
             f"{wf_report.to_html(index=False, escape=True)}"
+        )
+    mc_html = ""
+    if monte_carlo_bands is not None:
+        mc_html = (
+            "<h2>Monte Carlo Robustness</h2>"
+            "<p>Percentile bands from trade-order shuffle and bootstrap simulations.</p>"
+            f"{monte_carlo_bands.to_html(index=False, escape=True)}"
         )
     html = f"""<!doctype html>
 <html lang="en">
@@ -68,6 +78,7 @@ def render_html_report(
   <h2>Metrics</h2>
   {metrics_table}
   {wf_html}
+  {mc_html}
 </body>
 </html>
 """
@@ -99,3 +110,47 @@ def _dict_table(values: dict) -> str:
         for key, value in values.items()
     )
     return f"<table>{rows}</table>"
+
+
+def _walk_forward_details(wf_report: pd.DataFrame) -> str:
+    pieces: list[str] = []
+    param_cols = [
+        col
+        for col in (
+            "test_start",
+            "test_end",
+            "chosen_params",
+            "train_score",
+            "test_score",
+            "degradation_%",
+        )
+        if col in wf_report.columns
+    ]
+    if "chosen_params" in wf_report.columns and param_cols:
+        pieces.append("<h3>Per-window Parameters</h3>")
+        pieces.append(wf_report[param_cols].to_html(index=False, escape=True))
+
+    if {"train_score", "test_score"}.issubset(wf_report.columns):
+        chart = _degradation_chart(wf_report)
+        pieces.append("<h3>Walk-forward Degradation</h3>")
+        pieces.append(
+            f'<img alt="Walk-forward degradation chart" src="data:image/png;base64,{chart}">'
+        )
+    return "\n".join(pieces)
+
+
+def _degradation_chart(wf_report: pd.DataFrame) -> str:
+    plt = _pyplot()
+    labels = list(range(1, len(wf_report) + 1))
+    train = wf_report["train_score"].astype(float).replace([np.inf, -np.inf], np.nan)
+    test = wf_report["test_score"].astype(float).replace([np.inf, -np.inf], np.nan)
+    fig, ax = plt.subplots(figsize=(8, 3.5))
+    ax.plot(labels, train, marker="o", label="Train")
+    ax.plot(labels, test, marker="o", label="Out-of-sample")
+    ax.set_xlabel("Window")
+    ax.set_ylabel("Score")
+    ax.set_title("Walk-forward Degradation")
+    ax.grid(True, alpha=0.25)
+    ax.legend()
+    fig.tight_layout()
+    return _fig_to_base64(fig)

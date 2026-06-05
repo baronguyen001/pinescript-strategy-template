@@ -2,6 +2,13 @@
 
 from pinewf.engine import BacktestResult, StrategyConfig, run_backtest
 from pinewf.metrics import buy_hold_metrics, compute_metrics
+from pinewf.montecarlo import (
+    MonteCarloConfig,
+    load_trade_returns,
+    percentile_bands,
+    run_monte_carlo,
+    simulate_trade_returns,
+)
 from pinewf.walk_forward import (
     WFWindow,
     consistency,
@@ -12,13 +19,18 @@ from pinewf.walk_forward import (
 
 __all__ = [
     "BacktestResult",
+    "MonteCarloConfig",
     "StrategyConfig",
     "WFWindow",
     "buy_hold_metrics",
     "compute_metrics",
     "consistency",
+    "load_trade_returns",
+    "percentile_bands",
     "rolling_windows",
     "run_backtest",
+    "run_monte_carlo",
+    "simulate_trade_returns",
     "walk_forward_optimize",
     "walk_forward_replay",
 ]

@@ -11,6 +11,7 @@ from pinewf.data import fetch_binance_klines, load_ohlcv
 from pinewf.engine import StrategyConfig, run_backtest
 from pinewf.grid import param_grid
 from pinewf.metrics import buy_hold_metrics, compute_metrics
+from pinewf.montecarlo import MonteCarloConfig, run_monte_carlo
 from pinewf.pine_csv import metrics_from_pine_export, parse_tradingview_trades
 from pinewf.report import render_html_report
 from pinewf.walk_forward import consistency, walk_forward_optimize, walk_forward_replay
@@ -65,6 +66,12 @@ def cmd_walkforward(args: argparse.Namespace) -> int:
         report = walk_forward_replay(df, cfg, args.train, args.test)
     _print_table(report)
     print(f"\nconsistency: {consistency(report)}")
+    if args.html:
+        result = run_backtest(df, cfg)
+        metrics = compute_metrics(result.equity, result.trades, cfg.initial, len(df), "strategy")
+        mc_bands = _mc_bands(args)
+        path = render_html_report(result, metrics, report, mc_bands, args.html)
+        print(f"wrote {path}")
     return 0
 
 
@@ -82,8 +89,17 @@ def cmd_report(args: argparse.Namespace) -> int:
     result = run_backtest(df, cfg)
     metrics = compute_metrics(result.equity, result.trades, cfg.initial, len(df), "strategy")
     wf = walk_forward_replay(df, cfg, args.train, args.test) if args.walkforward else None
-    path = render_html_report(result, metrics, wf, args.html)
+    path = render_html_report(result, metrics, wf, _mc_bands(args), args.html)
     print(f"wrote {path}")
+    return 0
+
+
+def cmd_montecarlo(args: argparse.Namespace) -> int:
+    _, bands = run_monte_carlo(
+        args.trades_or_csv,
+        MonteCarloConfig(initial=args.initial, iters=args.iters, seed=args.seed),
+    )
+    _print_table(bands)
     return 0
 
 
@@ -118,6 +134,8 @@ def _parser() -> argparse.ArgumentParser:
     wf.add_argument("--train", type=float, default=2.0)
     wf.add_argument("--test", type=float, default=1.0)
     wf.add_argument("--optimize", action="store_true")
+    wf.add_argument("--html", help="write an HTML walk-forward report")
+    _monte_carlo_args(wf)
     wf.set_defaults(func=cmd_walkforward)
 
     parse = sub.add_parser("parse-pine", help="parse a TradingView List of Trades export")
@@ -132,7 +150,15 @@ def _parser() -> argparse.ArgumentParser:
     report.add_argument("--walkforward", action="store_true")
     report.add_argument("--train", type=float, default=2.0)
     report.add_argument("--test", type=float, default=1.0)
+    _monte_carlo_args(report)
     report.set_defaults(func=cmd_report)
+
+    mc = sub.add_parser("montecarlo", help="simulate robustness from realized trade returns")
+    mc.add_argument("trades_or_csv")
+    mc.add_argument("--iters", type=int, default=1_000)
+    mc.add_argument("--seed", type=int)
+    mc.add_argument("--initial", type=float, default=10_000.0)
+    mc.set_defaults(func=cmd_montecarlo)
     return parser
 
 
@@ -158,6 +184,12 @@ def _grid_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--grid-slow", "--slow-list", dest="grid_slow")
     parser.add_argument("--grid-sl", "--sl", dest="grid_sl")
     parser.add_argument("--rank-by", default="sharpe")
+
+
+def _monte_carlo_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--montecarlo-trades", help="trade CSV to include MC bands in HTML")
+    parser.add_argument("--montecarlo-iters", type=int, default=1_000)
+    parser.add_argument("--seed", type=int)
 
 
 def _cfg(args: argparse.Namespace) -> StrategyConfig:
@@ -189,6 +221,17 @@ def _grid_from_args(args: argparse.Namespace) -> dict[str, list[Any]]:
         "sl": _floats(sl_src),
     }
     return base
+
+
+def _mc_bands(args: argparse.Namespace) -> pd.DataFrame | None:
+    path = getattr(args, "montecarlo_trades", None)
+    if not path:
+        return None
+    _, bands = run_monte_carlo(
+        path,
+        MonteCarloConfig(initial=args.initial, iters=args.montecarlo_iters, seed=args.seed),
+    )
+    return bands
 
 
 def _first_int(value: str) -> int:
