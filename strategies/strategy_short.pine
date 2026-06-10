@@ -1,0 +1,95 @@
+//@version=6
+strategy("Breakdown Short Template", overlay=true, pyramiding=0, process_orders_on_close=false,
+     commission_type=strategy.commission.percent, commission_value=0.1, slippage=2)
+
+// Generic short-only research template. Enters on a downside breakdown (close below a
+// Donchian-style lower channel) while a higher MA confirms a down regime, then covers at
+// structure (a faster channel midline) with optional stop, take profit, and trailing exits.
+// Defaults are illustrative starting points, not a recommendation. Tune with your own
+// market, timeframe, costs, and walk-forward tests.
+
+signalGroup = "Signal"
+breakout_length = input.int(20, "Breakdown length", minval=2, group=signalGroup)
+ma_type = input.string("EMA", "Regime MA type", options=["SMA", "EMA"], group=signalGroup)
+trend_length = input.int(200, "Regime MA length", minval=20, group=signalGroup)
+use_trend_filter = input.bool(true, "Use down-regime filter", group=signalGroup)
+
+riskGroup = "Risk"
+stop_type = input.string("Percent", "Stop type", options=["Percent", "ATR", "None"], group=riskGroup)
+stop_loss_pct = input.float(8.0, "Stop loss %", minval=0.5, maxval=50, group=riskGroup)
+atr_length = input.int(14, "ATR length", minval=1, group=riskGroup)
+atr_mult = input.float(2.0, "ATR stop multiple", minval=0.5, group=riskGroup)
+
+exitGroup = "Optional exits"
+use_take_profit = input.bool(false, "Use take profit", group=exitGroup)
+take_profit_pct = input.float(10.0, "Take profit %", minval=0.5, group=exitGroup)
+use_trailing = input.bool(false, "Use trailing stop", group=exitGroup)
+trailing_pct = input.float(15.0, "Trailing %", minval=0.5, group=exitGroup)
+
+ma(src, len) =>
+    ma_type == "SMA" ? ta.sma(src, len) : ta.ema(src, len)
+
+lower_channel = ta.lowest(low, breakout_length)[1]
+upper_channel = ta.highest(high, breakout_length)[1]
+mid_channel = (lower_channel + upper_channel) / 2
+regime = ma(close, trend_length)
+atrv = ta.atr(atr_length)
+
+regime_down = close < regime
+breakdown = close < lower_channel
+short_cond = breakdown and (not use_trend_filter or regime_down)
+cover_cond = close >= mid_channel
+
+var float entry_price = na
+var float trough_low = na
+
+if short_cond and strategy.position_size == 0
+    strategy.entry("Short", strategy.short)
+
+if strategy.position_size < 0 and strategy.position_size[1] >= 0
+    entry_price := strategy.position_avg_price
+    trough_low := low
+
+if strategy.position_size < 0
+    trough_low := math.min(nz(trough_low, low), low)
+    percent_stop = entry_price * (1 + stop_loss_pct / 100)
+    atr_stop = entry_price + atr_mult * atrv
+    base_stop = stop_type == "Percent" ? percent_stop : stop_type == "ATR" ? atr_stop : na
+    trail_stop = use_trailing ? trough_low * (1 + trailing_pct / 100) : na
+    active_stop = na(trail_stop) ? base_stop : na(base_stop) ? trail_stop : math.min(base_stop, trail_stop)
+    limit_price = use_take_profit ? entry_price * (1 - take_profit_pct / 100) : na
+    strategy.exit("Cover Exit", "Short", stop=active_stop, limit=limit_price)
+
+if cover_cond and strategy.position_size < 0
+    strategy.close("Short", comment="Structure cover")
+
+if strategy.position_size == 0
+    entry_price := na
+    trough_low := na
+
+plot(lower_channel, "Breakdown level", color=color.new(color.red, 0), linewidth=2)
+plot(mid_channel, "Cover midline", color=color.new(color.gray, 10), linewidth=2)
+plot(regime, "Regime MA", color=color.new(color.orange, 20), linewidth=1)
+bgcolor(use_trend_filter and regime_down ? color.new(color.red, 92) : na)
+plotshape(short_cond, title="Short entry", style=shape.triangledown, location=location.abovebar,
+     color=color.new(color.red, 0), size=size.tiny, text="SHORT")
+plotshape(cover_cond and strategy.position_size < 0, title="Cover signal", style=shape.triangleup,
+     location=location.belowbar, color=color.new(color.green, 0), size=size.tiny, text="COVER")
+
+alertcondition(short_cond, "Short entry", "{{ticker}} {{interval}}: SHORT entry at {{close}}")
+alertcondition(cover_cond and strategy.position_size < 0, "Cover signal", "{{ticker}} {{interval}}: COVER signal at {{close}}")
+
+var table info = table.new(position.top_right, 2, 6, border_width=1)
+if barstate.islast
+    table.cell(info, 0, 0, "Position")
+    table.cell(info, 1, 0, strategy.position_size < 0 ? "Short" : "Flat")
+    table.cell(info, 0, 1, "Entry")
+    table.cell(info, 1, 1, na(entry_price) ? "-" : str.tostring(entry_price, format.mintick))
+    table.cell(info, 0, 2, "Current")
+    table.cell(info, 1, 2, str.tostring(close, format.mintick))
+    table.cell(info, 0, 3, "Breakdown / Mid")
+    table.cell(info, 1, 3, str.tostring(lower_channel, format.mintick) + " / " + str.tostring(mid_channel, format.mintick))
+    table.cell(info, 0, 4, "Regime")
+    table.cell(info, 1, 4, str.tostring(regime, format.mintick))
+    table.cell(info, 0, 5, "Regime down")
+    table.cell(info, 1, 5, regime_down ? "Yes" : "No")

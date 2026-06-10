@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pinescript-walkforward"
-version = "0.2.0"
+version = "0.3.0"
 description = "Pine Script strategy templates with a Python walk-forward validation companion."
 readme = "README.md"
 license = "MIT"

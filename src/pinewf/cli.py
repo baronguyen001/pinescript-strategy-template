@@ -11,9 +11,23 @@ from pinewf.data import fetch_binance_klines, load_ohlcv
 from pinewf.engine import StrategyConfig, run_backtest
 from pinewf.grid import param_grid
 from pinewf.metrics import buy_hold_metrics, compute_metrics
-from pinewf.montecarlo import MonteCarloConfig, run_monte_carlo
+from pinewf.montecarlo import (
+    MonteCarloConfig,
+    equity_path_bands,
+    load_trade_returns,
+    monte_carlo_figure,
+    render_monte_carlo_png,
+    run_monte_carlo,
+)
 from pinewf.pine_csv import metrics_from_pine_export, parse_tradingview_trades
 from pinewf.report import render_html_report
+from pinewf.sensitivity import (
+    SensitivityConfig,
+    duration_buckets,
+    duration_sensitivity,
+    load_trades,
+    sensitivity_from_csv,
+)
 from pinewf.walk_forward import consistency, walk_forward_optimize, walk_forward_replay
 
 
@@ -69,8 +83,9 @@ def cmd_walkforward(args: argparse.Namespace) -> int:
     if args.html:
         result = run_backtest(df, cfg)
         metrics = compute_metrics(result.equity, result.trades, cfg.initial, len(df), "strategy")
-        mc_bands = _mc_bands(args)
-        path = render_html_report(result, metrics, report, mc_bands, args.html)
+        path = render_html_report(
+            result, metrics, report, out_path=args.html, **_report_extras(args)
+        )
         print(f"wrote {path}")
     return 0
 
@@ -89,17 +104,28 @@ def cmd_report(args: argparse.Namespace) -> int:
     result = run_backtest(df, cfg)
     metrics = compute_metrics(result.equity, result.trades, cfg.initial, len(df), "strategy")
     wf = walk_forward_replay(df, cfg, args.train, args.test) if args.walkforward else None
-    path = render_html_report(result, metrics, wf, _mc_bands(args), args.html)
+    path = render_html_report(result, metrics, wf, out_path=args.html, **_report_extras(args))
     print(f"wrote {path}")
     return 0
 
 
 def cmd_montecarlo(args: argparse.Namespace) -> int:
-    _, bands = run_monte_carlo(
-        args.trades_or_csv,
-        MonteCarloConfig(initial=args.initial, iters=args.iters, seed=args.seed),
-    )
+    config = MonteCarloConfig(initial=args.initial, iters=args.iters, seed=args.seed)
+    _, bands = run_monte_carlo(args.trades_or_csv, config)
     _print_table(bands)
+    if args.png:
+        out = render_monte_carlo_png(args.trades_or_csv, config, args.png, args.png_method)
+        print(f"wrote {out}")
+    return 0
+
+
+def cmd_sensitivity(args: argparse.Namespace) -> int:
+    table, summary = sensitivity_from_csv(args.trades_or_csv, _sensitivity_cfg(args))
+    _print_table(table)
+    print(
+        f"\nverdict: {summary['verdict']} (dominant {summary['dominant_bucket']} "
+        f"= {summary['dominant_share_pct']}% of gross profit)"
+    )
     return 0
 
 
@@ -158,7 +184,23 @@ def _parser() -> argparse.ArgumentParser:
     mc.add_argument("--iters", type=int, default=1_000)
     mc.add_argument("--seed", type=int)
     mc.add_argument("--initial", type=float, default=10_000.0)
+    mc.add_argument("--png", help="write an equity-band PNG chart (needs the viz extra)")
+    mc.add_argument("--png-method", choices=["shuffle", "bootstrap"], default="bootstrap")
     mc.set_defaults(func=cmd_montecarlo)
+
+    sens = sub.add_parser("sensitivity", help="bucket realized trades by holding duration")
+    sens.add_argument("trades_or_csv")
+    sens.add_argument(
+        "--buckets",
+        help="comma-separated holding-duration bucket edges (bars or days)",
+    )
+    sens.add_argument(
+        "--concentration",
+        type=float,
+        default=0.6,
+        help="flag when one bucket holds this fraction of gross profit",
+    )
+    sens.set_defaults(func=cmd_sensitivity)
     return parser
 
 
@@ -190,6 +232,9 @@ def _monte_carlo_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--montecarlo-trades", help="trade CSV to include MC bands in HTML")
     parser.add_argument("--montecarlo-iters", type=int, default=1_000)
     parser.add_argument("--seed", type=int)
+    parser.add_argument(
+        "--sensitivity-trades", help="trade CSV to include a holding-period section in HTML"
+    )
 
 
 def _cfg(args: argparse.Namespace) -> StrategyConfig:
@@ -223,15 +268,33 @@ def _grid_from_args(args: argparse.Namespace) -> dict[str, list[Any]]:
     return base
 
 
-def _mc_bands(args: argparse.Namespace) -> pd.DataFrame | None:
-    path = getattr(args, "montecarlo_trades", None)
-    if not path:
-        return None
-    _, bands = run_monte_carlo(
-        path,
-        MonteCarloConfig(initial=args.initial, iters=args.montecarlo_iters, seed=args.seed),
-    )
-    return bands
+def _report_extras(args: argparse.Namespace) -> dict[str, Any]:
+    extras: dict[str, Any] = {}
+    mc_path = getattr(args, "montecarlo_trades", None)
+    if mc_path:
+        config = MonteCarloConfig(initial=args.initial, iters=args.montecarlo_iters, seed=args.seed)
+        _, bands = run_monte_carlo(mc_path, config)
+        extras["monte_carlo_bands"] = bands
+        try:
+            mc_bands = equity_path_bands(load_trade_returns(mc_path), config)
+            extras["monte_carlo_figure"] = monte_carlo_figure(mc_bands)
+        except RuntimeError:
+            extras["monte_carlo_figure"] = None
+    sens_path = getattr(args, "sensitivity_trades", None)
+    if sens_path:
+        trades = load_trades(sens_path)
+        cfg = SensitivityConfig()
+        extras["sensitivity_table"] = duration_buckets(trades, cfg)
+        extras["sensitivity_summary"] = duration_sensitivity(trades, cfg)
+    return extras
+
+
+def _sensitivity_cfg(args: argparse.Namespace) -> SensitivityConfig:
+    if args.buckets:
+        edges = tuple(_floats(args.buckets))
+    else:
+        return SensitivityConfig(concentration_threshold=args.concentration)
+    return SensitivityConfig(buckets=edges, concentration_threshold=args.concentration)
 
 
 def _first_int(value: str) -> int:

@@ -34,6 +34,9 @@ def render_html_report(
     wf_report: pd.DataFrame | None = None,
     monte_carlo_bands: pd.DataFrame | None = None,
     out_path: str | Path = "report.html",
+    monte_carlo_figure: Any | None = None,
+    sensitivity_table: pd.DataFrame | None = None,
+    sensitivity_summary: dict | None = None,
 ) -> Path:
     """Write a self-contained HTML report with embedded equity image and tables."""
     fig = equity_curve_figure(result.equity)
@@ -49,11 +52,34 @@ def render_html_report(
             f"{_walk_forward_details(wf_report)}"
             f"{wf_report.to_html(index=False, escape=True)}"
         )
+    sensitivity_html = ""
+    if sensitivity_table is not None:
+        verdict = ""
+        if sensitivity_summary is not None:
+            verdict = (
+                f"<p><strong>Verdict:</strong> "
+                f"{escape(str(sensitivity_summary.get('verdict', '')))}</p>"
+                f"{_dict_table(sensitivity_summary)}"
+            )
+        sensitivity_html = (
+            "<h2>Holding-period Sensitivity</h2>"
+            "<p>Metrics bucketed by trade holding duration. A single band that holds most "
+            "of the gross profit can mean the edge is overfit to one duration.</p>"
+            f"{verdict}"
+            f"{sensitivity_table.to_html(index=False, escape=True)}"
+        )
     mc_html = ""
     if monte_carlo_bands is not None:
+        chart = ""
+        if monte_carlo_figure is not None:
+            chart = (
+                '<img alt="Monte Carlo equity bands" '
+                f'src="data:image/png;base64,{_fig_to_base64(monte_carlo_figure)}">'
+            )
         mc_html = (
             "<h2>Monte Carlo Robustness</h2>"
             "<p>Percentile bands from trade-order shuffle and bootstrap simulations.</p>"
+            f"{chart}"
             f"{monte_carlo_bands.to_html(index=False, escape=True)}"
         )
     html = f"""<!doctype html>
@@ -78,6 +104,7 @@ def render_html_report(
   <h2>Metrics</h2>
   {metrics_table}
   {wf_html}
+  {sensitivity_html}
   {mc_html}
 </body>
 </html>
