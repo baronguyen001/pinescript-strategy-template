@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.4.0 - 2026-06-21
+
+- Added `strategies/strategy_breakout.pine`, a generic long-only Donchian-channel
+  breakout template (prior-bar channel to avoid same-bar peeking, channel exit +
+  percent stop) with the same input-block and alert-hook structure as the others.
+  Generic defaults, explicitly not a recommendation.
+- Added extended risk analytics (`pinewf.risk`): Sortino, Calmar, Ulcer index,
+  recovery factor, max drawdown duration (bars), average drawdown, and longest
+  losing streak. Surface them with `pinewf backtest --risk` and they now appear
+  as a "Risk metrics" section in the `pinewf report` HTML. Descriptive statistics
+  only — no tuned parameters.
+
 ## v0.3.0 - 2026-06-10
 
 - Added `strategies/strategy_short.pine`, a generic short-only Pine v6 breakdown template with the same input-block, risk-exit, alert-hook, and info-table structure as the other templates.

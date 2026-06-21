@@ -37,11 +37,15 @@ def render_html_report(
     monte_carlo_figure: Any | None = None,
     sensitivity_table: pd.DataFrame | None = None,
     sensitivity_summary: dict | None = None,
+    risk: dict | None = None,
 ) -> Path:
     """Write a self-contained HTML report with embedded equity image and tables."""
     fig = equity_curve_figure(result.equity)
     image = _fig_to_base64(fig)
     metrics_table = _dict_table(metrics)
+    risk_html = ""
+    if risk is not None:
+        risk_html = "<h2>Risk metrics</h2>" + _dict_table(risk)
     wf_html = ""
     if wf_report is not None:
         summary = consistency(wf_report)
@@ -103,6 +107,7 @@ def render_html_report(
   <img alt="Equity curve" src="data:image/png;base64,{image}">
   <h2>Metrics</h2>
   {metrics_table}
+  {risk_html}
   {wf_html}
   {sensitivity_html}
   {mc_html}

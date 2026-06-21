@@ -30,7 +30,8 @@ The sample file is a small public-data-derived, normalized OHLCV fixture for off
 | `strategies/strategy_minimal.pine` | Small teaching version: MA cross plus fixed percent stop. |
 | `strategies/strategy_meanrev.pine` | Generic RSI/Bollinger mean-reversion template with risk exits and alerts. |
 | `strategies/strategy_short.pine` | Generic short-only breakdown template with mirrored risk exits and alerts. |
-| `pinewf backtest` | Python fill engine using signal-at-close to next-open execution with slippage and commission. |
+| `strategies/strategy_breakout.pine` | Generic long-only Donchian-channel breakout template with a channel exit and alerts. |
+| `pinewf backtest` | Python fill engine using signal-at-close to next-open execution with slippage and commission (`--risk` adds Sortino/Calmar/Ulcer/drawdown-duration). |
 | `pinewf grid` | In-sample parameter grid plus an overfit warning. |
 | `pinewf walkforward` | Fixed-parameter replay and train-then-test optimization. |
 | `pinewf montecarlo` | Trade-order shuffle and bootstrap bands, with optional `--png` equity-band chart. |

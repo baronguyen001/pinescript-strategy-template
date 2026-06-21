@@ -1,0 +1,35 @@
+//@version=6
+strategy("Donchian Breakout Template (generic)", overlay=true, pyramiding=0,
+     process_orders_on_close=false,
+     commission_type=strategy.commission.percent, commission_value=0.1, slippage=2)
+
+// Teaching template: long-only Donchian-channel breakout with a trailing
+// channel exit and a fixed percent stop. Defaults are illustrative starting
+// points, NOT a recommendation — tune and walk-forward test on your own data.
+
+entry_length = input.int(20, "Breakout lookback", minval=2)
+exit_length  = input.int(10, "Exit lookback", minval=2)
+stop_loss_pct = input.float(8.0, "Stop loss %", minval=0.5, maxval=50)
+
+upper = ta.highest(high, entry_length)[1]   // prior-bar channel avoids same-bar peeking
+lower = ta.lowest(low, exit_length)[1]
+
+long_cond = close > upper
+exit_cond = close < lower
+
+if long_cond and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+if strategy.position_size > 0
+    stop_price = strategy.position_avg_price * (1 - stop_loss_pct / 100)
+    strategy.exit("Stop", "Long", stop=stop_price)
+
+if exit_cond and strategy.position_size > 0
+    strategy.close("Long", comment="Channel exit")
+
+plot(upper, "Upper channel", color=color.new(color.teal, 0), linewidth=2)
+plot(lower, "Lower channel", color=color.new(color.orange, 0), linewidth=2)
+plotshape(long_cond, "Breakout", shape.triangleup, location.belowbar, color=color.green, size=size.tiny)
+
+// Alert hook (same structure as the other templates).
+alertcondition(long_cond, "Donchian breakout long", "Breakout entry on {{ticker}}")

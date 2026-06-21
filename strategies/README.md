@@ -1,6 +1,6 @@
 # Strategy Templates
 
-Start with `strategy_minimal.pine` if you are new to Pine. Use `strategy_template.pine` when you want configurable trend filters, ATR stops, trailing stops, take profit exits, an info table, and alert conditions. Use `strategy_meanrev.pine` when you want a second generic RSI/Bollinger mean-reversion baseline. Use `strategy_short.pine` when you want a generic short-only breakdown baseline.
+Start with `strategy_minimal.pine` if you are new to Pine. Use `strategy_template.pine` when you want configurable trend filters, ATR stops, trailing stops, take profit exits, an info table, and alert conditions. Use `strategy_meanrev.pine` when you want a second generic RSI/Bollinger mean-reversion baseline. Use `strategy_short.pine` when you want a generic short-only breakdown baseline. Use `strategy_breakout.pine` when you want a generic long-only Donchian-channel breakout baseline.
 
 | Input | Meaning | How to Tune |
 | --- | --- | --- |

@@ -21,6 +21,7 @@ from pinewf.montecarlo import (
 )
 from pinewf.pine_csv import metrics_from_pine_export, parse_tradingview_trades
 from pinewf.report import render_html_report
+from pinewf.risk import risk_metrics
 from pinewf.sensitivity import (
     SensitivityConfig,
     duration_buckets,
@@ -58,6 +59,9 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         buy_hold_metrics(df, cfg.initial, cfg.commission, cfg.slippage),
     ]
     _print_table(pd.DataFrame(rows))
+    if getattr(args, "risk", False):
+        print("\nExtended risk metrics (strategy):")
+        _print_table(pd.DataFrame([risk_metrics(result.equity, result.trades)]))
     return 0
 
 
@@ -104,7 +108,10 @@ def cmd_report(args: argparse.Namespace) -> int:
     result = run_backtest(df, cfg)
     metrics = compute_metrics(result.equity, result.trades, cfg.initial, len(df), "strategy")
     wf = walk_forward_replay(df, cfg, args.train, args.test) if args.walkforward else None
-    path = render_html_report(result, metrics, wf, out_path=args.html, **_report_extras(args))
+    risk = risk_metrics(result.equity, result.trades)
+    path = render_html_report(
+        result, metrics, wf, out_path=args.html, risk=risk, **_report_extras(args)
+    )
     print(f"wrote {path}")
     return 0
 
@@ -144,6 +151,7 @@ def _parser() -> argparse.ArgumentParser:
     backtest = sub.add_parser("backtest", help="run one backtest")
     backtest.add_argument("csv")
     _strategy_args(backtest)
+    backtest.add_argument("--risk", action="store_true", help="also print extended risk metrics")
     backtest.set_defaults(func=cmd_backtest)
 
     grid = sub.add_parser("grid", help="run an in-sample parameter grid")
