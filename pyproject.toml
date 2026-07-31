@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pinescript-walkforward"
-version = "0.4.0"
+version = "0.5.0"
 description = "Pine Script strategy templates with a Python walk-forward validation companion."
 readme = "README.md"
 license = "MIT"
@@ -43,7 +43,7 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 packages = ["pinewf"]
 ignore_missing_imports = true
 warn_unused_ignores = true

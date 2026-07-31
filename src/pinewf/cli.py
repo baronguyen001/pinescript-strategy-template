@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from pinewf.compare import compare_metrics, compare_summary
 from pinewf.data import fetch_binance_klines, load_ohlcv
 from pinewf.engine import StrategyConfig, run_backtest
 from pinewf.grid import param_grid
@@ -20,6 +22,8 @@ from pinewf.montecarlo import (
     run_monte_carlo,
 )
 from pinewf.pine_csv import metrics_from_pine_export, parse_tradingview_trades
+from pinewf.pine_lint import findings_to_json, format_findings, lint_file, worst_severity
+from pinewf.regime import RegimeConfig, regime_breakdown
 from pinewf.report import render_html_report
 from pinewf.risk import risk_metrics
 from pinewf.sensitivity import (
@@ -109,9 +113,12 @@ def cmd_report(args: argparse.Namespace) -> int:
     metrics = compute_metrics(result.equity, result.trades, cfg.initial, len(df), "strategy")
     wf = walk_forward_replay(df, cfg, args.train, args.test) if args.walkforward else None
     risk = risk_metrics(result.equity, result.trades)
-    path = render_html_report(
-        result, metrics, wf, out_path=args.html, risk=risk, **_report_extras(args)
-    )
+    extras = _report_extras(args)
+    if getattr(args, "regime", False):
+        regime_table, regime_stats = regime_breakdown(df, result.trades, _regime_cfg(args))
+        extras["regime_table"] = regime_table
+        extras["regime_summary"] = regime_stats
+    path = render_html_report(result, metrics, wf, out_path=args.html, risk=risk, **extras)
     print(f"wrote {path}")
     return 0
 
@@ -132,6 +139,51 @@ def cmd_sensitivity(args: argparse.Namespace) -> int:
     print(
         f"\nverdict: {summary['verdict']} (dominant {summary['dominant_bucket']} "
         f"= {summary['dominant_share_pct']}% of gross profit)"
+    )
+    return 0
+
+
+def cmd_pine_lint(args: argparse.Namespace) -> int:
+    findings = lint_file(args.pine)
+    label = str(args.pine)
+    if args.format == "json":
+        print(findings_to_json(findings, label))
+    else:
+        print(format_findings(findings, label))
+    worst = worst_severity(findings)
+    if worst is None:
+        return 0
+    gate = ["error", "warning", "info"]
+    return 1 if gate.index(worst) <= gate.index(args.fail_on) else 0
+
+
+def cmd_regime(args: argparse.Namespace) -> int:
+    df = load_ohlcv(args.csv)
+    cfg = _cfg(args)
+    result = run_backtest(df, cfg)
+    table, summary = regime_breakdown(df, result.trades, _regime_cfg(args))
+    _print_table(table)
+    print(
+        f"\nverdict: {summary['verdict']} (dominant {summary['dominant_regime']} "
+        f"= {summary['dominant_share_pct']}% of gross profit)"
+    )
+    return 0
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    df = load_ohlcv(args.csv)
+    base_cfg = _cfg(args)
+    cand_cfg = _candidate_cfg(args, base_cfg)
+    rows = []
+    for label, cfg in (("baseline", base_cfg), ("candidate", cand_cfg)):
+        result = run_backtest(df, cfg)
+        rows.append(compute_metrics(result.equity, result.trades, cfg.initial, len(df), label))
+    table = compare_metrics(rows[0], rows[1])
+    summary = compare_summary(table)
+    _print_table(table)
+    print(
+        f"\nverdict: {summary['verdict']} ({summary['n_better']} better, "
+        f"{summary['n_worse']} worse, {summary['n_tied']} tied)"
     )
     return 0
 
@@ -184,6 +236,8 @@ def _parser() -> argparse.ArgumentParser:
     report.add_argument("--walkforward", action="store_true")
     report.add_argument("--train", type=float, default=2.0)
     report.add_argument("--test", type=float, default=1.0)
+    report.add_argument("--regime", action="store_true", help="add a market-regime section")
+    _regime_args(report)
     _monte_carlo_args(report)
     report.set_defaults(func=cmd_report)
 
@@ -209,7 +263,57 @@ def _parser() -> argparse.ArgumentParser:
         help="flag when one bucket holds this fraction of gross profit",
     )
     sens.set_defaults(func=cmd_sensitivity)
+
+    lint = sub.add_parser("pine-lint", help="static checks on a Pine Script strategy file")
+    lint.add_argument("pine")
+    lint.add_argument("--format", choices=["text", "json"], default="text")
+    lint.add_argument(
+        "--fail-on",
+        choices=["error", "warning", "info"],
+        default="error",
+        help="exit 1 when a finding of at least this severity is present",
+    )
+    lint.set_defaults(func=cmd_pine_lint)
+
+    regime = sub.add_parser("regime", help="break realized trades down by market regime")
+    regime.add_argument("csv")
+    _strategy_args(regime)
+    _regime_args(regime)
+    regime.set_defaults(func=cmd_regime)
+
+    compare = sub.add_parser("compare", help="compare two parameter sets on the same data")
+    compare.add_argument("csv")
+    _strategy_args(compare)
+    compare.add_argument("--vs-fast", type=int)
+    compare.add_argument("--vs-slow", type=int)
+    compare.add_argument("--vs-sl-pct", type=float)
+    compare.add_argument("--vs-trend", type=int)
+    compare.set_defaults(func=cmd_compare)
     return parser
+
+
+def _regime_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--regime-window", type=int, default=50)
+    parser.add_argument("--regime-slope", type=float, default=2.0)
+    parser.add_argument("--regime-concentration", type=float, default=0.6)
+
+
+def _regime_cfg(args: argparse.Namespace) -> RegimeConfig:
+    return RegimeConfig(
+        window=getattr(args, "regime_window", 50),
+        slope_threshold_pct=getattr(args, "regime_slope", 2.0),
+        concentration_threshold=getattr(args, "regime_concentration", 0.6),
+    )
+
+
+def _candidate_cfg(args: argparse.Namespace, base: StrategyConfig) -> StrategyConfig:
+    return replace(
+        base,
+        fast=args.vs_fast if args.vs_fast is not None else base.fast,
+        slow=args.vs_slow if args.vs_slow is not None else base.slow,
+        trend=args.vs_trend if args.vs_trend is not None else base.trend,
+        stop_loss_pct=args.vs_sl_pct if args.vs_sl_pct is not None else base.stop_loss_pct,
+    )
 
 
 def _strategy_args(parser: argparse.ArgumentParser) -> None:

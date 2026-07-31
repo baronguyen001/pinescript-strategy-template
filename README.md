@@ -7,7 +7,7 @@
 
 ![Walk-forward HTML report](screenshots/walk_forward_html_report.png)
 
-TradingView's Strategy Tester gives you one in-sample story. That is useful, but it is also easy to overfit. This repo pairs generic Pine v6 trend, mean-reversion, and short-side breakdown templates with `pinewf`, a Python companion that replays fills, runs parameter grids, performs walk-forward tests, stress-tests realized trades with Monte Carlo, checks holding-period sensitivity, parses TradingView trade exports, and generates a self-contained HTML report.
+TradingView's Strategy Tester gives you one in-sample story. That is useful, but it is also easy to overfit. This repo pairs generic Pine v6 trend, mean-reversion, and short-side breakdown templates with `pinewf`, a Python companion that replays fills, runs parameter grids, performs walk-forward tests, stress-tests realized trades with Monte Carlo, checks holding-period sensitivity, parses TradingView trade exports, lints the Pine source itself, and generates a self-contained HTML report.
 
 Template, bring your own thresholds. The defaults are illustrative starting points, not a recommendation.
 
@@ -17,7 +17,8 @@ Template, bring your own thresholds. The defaults are illustrative starting poin
 pip install -e ".[viz]"
 pinewf walkforward examples/sample_btc_4h.csv --train 2 --test 1 --optimize
 pinewf montecarlo examples/sample_tradingview_export.csv --iters 1000 --seed 7
-pinewf report examples/sample_btc_4h.csv --html out.html --walkforward
+pinewf pine-lint strategies/strategy_minimal.pine
+pinewf report examples/sample_btc_4h.csv --html out.html --walkforward --regime
 ```
 
 The sample file is a small public-data-derived, normalized OHLCV fixture for offline demos only. Any numbers printed from it are illustrative research output, not strategy guidance.
@@ -37,7 +38,10 @@ The sample file is a small public-data-derived, normalized OHLCV fixture for off
 | `pinewf montecarlo` | Trade-order shuffle and bootstrap bands, with optional `--png` equity-band chart. |
 | `pinewf sensitivity` | Holding-period buckets that flag edge overfit to one trade-duration band. |
 | `pinewf parse-pine` | Metrics from TradingView's own List of Trades CSV export. |
-| `pinewf report` | Self-contained HTML report with equity curve, OOS tables, degradation chart, sensitivity, and optional MC bands. |
+| `pinewf pine-lint` | Static checks on a `.pine` file: lookahead, intrabar repainting, missing commission/slippage, entries without an exit, missing alert hook, hardcoded indicator lengths. |
+| `pinewf regime` | Buckets realized trades by the trend regime at entry and flags edge that only exists in one market state. |
+| `pinewf compare` | A/B two parameter sets on the same data and the same fill engine, with per-metric deltas and a verdict. |
+| `pinewf report` | Self-contained HTML report with equity curve, OOS tables, degradation chart, sensitivity, optional market-regime section (`--regime`), and optional MC bands. |
 
 ## How It Works
 

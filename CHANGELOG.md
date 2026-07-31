@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.0 - 2026-07-31
+
+- Added `pinewf pine-lint`, a dependency-free static checker for Pine v6 strategy
+  sources. Seven rules cover lookahead (`barmerge.lookahead_on`), intrabar
+  repainting (`calc_on_every_tick=true`), missing commission/slippage in the
+  `strategy()` declaration, entries with no exit module, a missing alert hook, and
+  indicator lengths hardcoded instead of exposed through `input.*`. Text or JSON
+  output with a `--fail-on` severity gate for pre-commit and CI use.
+- Added `pinewf regime`, which labels every bar as `UPTREND`, `RANGE`, or
+  `DOWNTREND` from a moving-average slope and breaks realized trades down by the
+  regime active at entry. Flags profit concentrated in a single market state, the
+  same way the holding-period view flags a single duration band. Also available as
+  a "Market Regime" section in the HTML report via `pinewf report --regime`.
+- Added `pinewf compare`, an A/B of two parameter sets over the same data and the
+  same fill engine, with per-metric deltas, an improvement direction per metric,
+  and a better/worse/mixed verdict. Descriptive output only, not a recommendation.
+- Maintenance: raised the mypy analysis target to 3.12 so the type gate keeps
+  working with current NumPy stubs. The package still supports Python 3.11+.
+
 ## v0.4.0 - 2026-06-21
 
 - Added `strategies/strategy_breakout.pine`, a generic long-only Donchian-channel

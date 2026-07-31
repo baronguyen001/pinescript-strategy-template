@@ -38,6 +38,8 @@ def render_html_report(
     sensitivity_table: pd.DataFrame | None = None,
     sensitivity_summary: dict | None = None,
     risk: dict | None = None,
+    regime_table: pd.DataFrame | None = None,
+    regime_summary: dict | None = None,
 ) -> Path:
     """Write a self-contained HTML report with embedded equity image and tables."""
     fig = equity_curve_figure(result.equity)
@@ -71,6 +73,22 @@ def render_html_report(
             "of the gross profit can mean the edge is overfit to one duration.</p>"
             f"{verdict}"
             f"{sensitivity_table.to_html(index=False, escape=True)}"
+        )
+    regime_html = ""
+    if regime_table is not None:
+        regime_verdict = ""
+        if regime_summary is not None:
+            regime_verdict = (
+                f"<p><strong>Verdict:</strong> "
+                f"{escape(str(regime_summary.get('verdict', '')))}</p>"
+                f"{_dict_table(regime_summary)}"
+            )
+        regime_html = (
+            "<h2>Market Regime</h2>"
+            "<p>Metrics bucketed by the trend regime active at entry. Profit that sits in "
+            "one regime can mean the edge only exists in that market state.</p>"
+            f"{regime_verdict}"
+            f"{regime_table.to_html(index=False, escape=True)}"
         )
     mc_html = ""
     if monte_carlo_bands is not None:
@@ -110,6 +128,7 @@ def render_html_report(
   {risk_html}
   {wf_html}
   {sensitivity_html}
+  {regime_html}
   {mc_html}
 </body>
 </html>

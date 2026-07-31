@@ -1,5 +1,13 @@
 """Walk-forward companion for parameterized Pine Script strategies."""
 
+from pinewf.compare import (
+    COMPARE_COLUMNS,
+    HIGHER_IS_BETTER,
+    LOWER_IS_BETTER,
+    compare_metrics,
+    compare_report,
+    compare_summary,
+)
 from pinewf.engine import BacktestResult, StrategyConfig, run_backtest
 from pinewf.metrics import buy_hold_metrics, compute_metrics
 from pinewf.montecarlo import (
@@ -11,6 +19,24 @@ from pinewf.montecarlo import (
     render_monte_carlo_png,
     run_monte_carlo,
     simulate_trade_returns,
+)
+from pinewf.pine_lint import (
+    RULES,
+    PineFinding,
+    count_by_severity,
+    findings_to_json,
+    format_findings,
+    lint_file,
+    lint_source,
+    worst_severity,
+)
+from pinewf.regime import (
+    REGIME_ORDER,
+    RegimeConfig,
+    label_regimes,
+    regime_breakdown,
+    regime_buckets,
+    regime_summary,
 )
 from pinewf.risk import (
     max_consecutive_losses,
@@ -35,30 +61,50 @@ from pinewf.walk_forward import (
 
 __all__ = [
     "BacktestResult",
+    "COMPARE_COLUMNS",
+    "HIGHER_IS_BETTER",
+    "LOWER_IS_BETTER",
     "MonteCarloConfig",
+    "PineFinding",
+    "REGIME_ORDER",
+    "RULES",
+    "RegimeConfig",
     "SensitivityConfig",
     "StrategyConfig",
     "WFWindow",
     "buy_hold_metrics",
+    "compare_metrics",
+    "compare_report",
+    "compare_summary",
     "compute_metrics",
     "consistency",
+    "count_by_severity",
     "duration_buckets",
     "duration_sensitivity",
     "equity_path_bands",
+    "findings_to_json",
+    "format_findings",
+    "label_regimes",
+    "lint_file",
+    "lint_source",
     "load_trade_returns",
     "max_consecutive_losses",
     "max_drawdown_duration_bars",
     "monte_carlo_figure",
     "percentile_bands",
+    "regime_breakdown",
+    "regime_buckets",
+    "regime_summary",
     "render_monte_carlo_png",
     "risk_metrics",
     "rolling_windows",
     "run_backtest",
     "run_monte_carlo",
     "sensitivity_from_csv",
+    "simulate_trade_returns",
     "sortino_ratio",
     "ulcer_index",
-    "simulate_trade_returns",
     "walk_forward_optimize",
     "walk_forward_replay",
+    "worst_severity",
 ]
